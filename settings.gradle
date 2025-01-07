@@ -1,0 +1,5 @@
+rootProject.name = 'spring-web-template'
+include 'module-common'
+include 'module-core'
+include 'server-api'
+
