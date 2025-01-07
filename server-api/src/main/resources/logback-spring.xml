@@ -2,15 +2,15 @@
 <configuration scan="true">
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
-        <layout class="ch.qos.logback.classic.PatternLayout">
+        <encoder>
             <Pattern>[%d{yyyy-MM-dd HH:mm:ss}:%-3relative][%thread] %highlight(%-5level) %cyan(%logger{36}:%L) -
                 %msg%n
             </Pattern>
-        </layout>
+        </encoder>
     </appender>
 
     <timestamp key="BY_DATE" datePattern="yyyy-MM-dd"/>
-    <property name="LOG_PATH" value="/logs"/>
+    <property name="LOG_PATH" value="../../logs"/>
     <property name="FILE_LOG_PATTERN"
               value="[%d{yyyy-MM-dd HH:mm:ss}:%-3relative][%thread] %-5level %logger{36}:%L - %msg%n"/>
 
