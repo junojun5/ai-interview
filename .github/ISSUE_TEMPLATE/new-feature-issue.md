@@ -1,5 +1,5 @@
 ---
-name: New Feature Issue
+name: New feature Issue
 about: Suggest an idea for this project
 title: ''
 labels: ''
