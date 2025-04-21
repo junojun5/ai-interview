@@ -30,8 +30,11 @@ public enum ErrorCode {
     /**
      * 401 UnAuthorized
      */
-    UNAUTHORIZED_EXCEPTION(UNAUTHORIZED, "토큰이 만료되었습니다. 다시 로그인 해주세요."),
-    UNAUTHORIZED_INVALID_TOKEN_EXCEPTION(UNAUTHORIZED, "유효하지 않은 토큰입니다."),
+    UNAUTHORIZED_EXCEPTION(UNAUTHORIZED, "사용자 인증에 실패했습니다."),
+    UNAUTHORIZED_INVALID_TOKEN_EXCEPTION(UNAUTHORIZED, "서명이 유효하지 않은 JWT 토큰입니다."),
+    UNAUTHORIZED_UNSUPPORTED_TOKEN_EXCEPTION(UNAUTHORIZED, "지원되지 않는 JWT 토큰입니다."),
+    UNAUTHORIZED_EMPTY_TOKEN_EXCEPTION(UNAUTHORIZED, "JWT 토큰이 비어있습니다."),
+    UNAUTHORIZED_UNKNOWN_TOKEN_EXCEPTION(UNAUTHORIZED, "JWT 처리 중 예상치 못한 오류가 발생했습니다."),
 
     /**
      * 403 Forbidden
@@ -44,6 +47,7 @@ public enum ErrorCode {
      * 404 Not Found
      */
     NOT_FOUND_EXCEPTION(NOT_FOUND, "존재하지 않습니다."),
+    NOT_FOUND_USER_EXCEPTION(NOT_FOUND, "존재하지 않는 유저입니다."),
 
     /**
      * 405 Method Not Allowed

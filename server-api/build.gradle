@@ -2,11 +2,23 @@ dependencies {
     implementation project(':module-common')
     implementation project(':module-core')
     implementation "org.springframework.boot:spring-boot-starter-web"
+    implementation "org.springframework.boot:spring-boot-starter-data-jpa"
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    // Spring security
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.security:spring-security-test'
+
     // redis 연동 라이브러리
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation "org.springframework.session:spring-session-data-redis"
+
     // mariadb jdbc 연동 라이브러리
      runtimeOnly 'org.mariadb.jdbc:mariadb-java-client:3.1.0'
+
+    // Thymeleaf
+    implementation 'nz.net.ultraq.thymeleaf:thymeleaf-layout-dialect'
+    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+    implementation 'org.thymeleaf.extras:thymeleaf-extras-springsecurity6'
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'

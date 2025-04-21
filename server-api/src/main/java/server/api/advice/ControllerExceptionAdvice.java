@@ -89,9 +89,11 @@ public class ControllerExceptionAdvice {
     @ExceptionHandler(TypeMismatchException.class)
     protected ErrorResponse handleTypeMismatchException(final TypeMismatchException exception) {
         log.warn(exception.getMessage());
-        return ErrorResponse.error(VALIDATION_WRONG_TYPE_EXCEPTION,
+        return ErrorResponse.error(
+            VALIDATION_WRONG_TYPE_EXCEPTION,
             String.format("%s (%s)", VALIDATION_WRONG_TYPE_EXCEPTION.getMessage(),
-                exception.getValue()));
+                exception.getValue())
+        );
     }
 
     /*

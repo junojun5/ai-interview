@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en"
+      layout:decorate="~{layouts/defaultLayout}"
+      layout:fragment="Content"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+>
+<head>
+    <title>스프링 기본 파일 업로드</title>
+</head>
+<body>
+<div>
+    <form method="POST" enctype="multipart/form-data" th:action="@{/api/data}">
+        <table>
+            <tr>
+                <td>File to upload:</td>
+                <td><input type="file" name="files" multiple/></td>
+            </tr>
+            <tr>
+                <td></td>
+                <td><input type="submit" value="Upload"/></td>
+            </tr>
+        </table>
+    </form>
+</div>
+</body>
+</html>
