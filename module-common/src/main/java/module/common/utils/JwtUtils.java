@@ -46,23 +46,28 @@ public class JwtUtils {
 
     // access, refresh token 발급
     public List<String> createTokenInfo(Long userId) {
-        long now = (new Date()).getTime();
-        Date accessTokenExpiresIn = new Date(now + ACCESS_TOKEN_DURATION.toMillis());
-        Date refreshTokenExpiresIn = new Date(now + REFRESH_TOKEN_DURATION.toMillis());
+        String accessToken = issueAccessToken(userId);
+        String refreshToken = issueRefreshToken();
 
-        // access token 발급
-        String accessToken = Jwts.builder()
-            .setHeaderParam("typ", "JWT")   // typ: JSON Web Token임을 명시
-            .setSubject(String.valueOf(userId)) // sub: DB에 저장된 사용자 ID
-            .setIssuedAt(new Date())    // iat: 토큰 생성 시점
-            .setExpiration(accessTokenExpiresIn)    // exp: 토큰 만료 시간
-            .signWith(secretKey, SignatureAlgorithm.HS512)  // alg: 서명 추가
-            .compact();
-
-        // refresh token 발급 및 redis에 저장
-        String refreshToken = saveRefreshToken(userId, refreshTokenExpiresIn);
+        redisTemplate.opsForValue().set(
+            RedisKey.REFRESH_TOKEN + userId,
+            refreshToken,
+            REFRESH_TOKEN_DURATION.toMillis(),
+            TimeUnit.MILLISECONDS
+        );
 
         return List.of(accessToken, refreshToken);
+    }
+
+    // access token 재발급
+    public String reissueAccessToken(Long userId) {
+        String refreshToken = (String) redisTemplate.opsForValue().get(RedisKey.REFRESH_TOKEN + userId);
+
+        if (!StringUtils.hasText(refreshToken) || !isValidateToken(refreshToken)) {
+            throw new UnAuthorizedException(ErrorCode.UNAUTHORIZED_EXPIRED_REFRESH_TOKEN_EXCEPTION);
+        }
+
+        return issueAccessToken(userId);
     }
 
     // refresh token 만료
@@ -70,8 +75,9 @@ public class JwtUtils {
         redisTemplate.opsForValue().set(
             RedisKey.REFRESH_TOKEN + userId,
             "",
-            REDIS_EXPIRED_DURATION.toMillis()
-            , TimeUnit.MILLISECONDS);
+            REDIS_EXPIRED_DURATION.toMillis(),
+            TimeUnit.MILLISECONDS
+        );
     }
 
     // 토큰 검증
@@ -81,12 +87,39 @@ public class JwtUtils {
         }
 
         Claims claims = parseClaims(token);
-        // 토큰에 명시된 만료시간이 현재 시간보다 이후이면 true, 아니면 false
         return claims.getExpiration().after(new Date());
     }
 
+    // access token에서 userId(subject) 추출
     public String getUserIdFromJwt(String accessToken) {
         return parseClaims(accessToken).getSubject();
+    }
+
+    // --- 내부 토큰 발급 로직 ---
+
+    private String issueAccessToken(Long userId) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + ACCESS_TOKEN_DURATION.toMillis());
+
+        return Jwts.builder()
+            .setHeaderParam("typ", "JWT")
+            .setSubject(String.valueOf(userId))
+            .setIssuedAt(now)
+            .setExpiration(expiry)
+            .signWith(secretKey, SignatureAlgorithm.HS512)
+            .compact();
+    }
+
+    private String issueRefreshToken() {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + REFRESH_TOKEN_DURATION.toMillis());
+
+        return Jwts.builder()
+            .setHeaderParam("typ", "JWT")
+            .setIssuedAt(now)
+            .setExpiration(expiry)
+            .signWith(secretKey, SignatureAlgorithm.HS512)
+            .compact();
     }
 
     private Claims parseClaims(String token) {
@@ -96,13 +129,12 @@ public class JwtUtils {
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
-        } catch (io.jsonwebtoken.security.SecurityException | MalformedJwtException |
-                 DecodingException e) {
+        } catch (io.jsonwebtoken.security.SecurityException | MalformedJwtException | DecodingException e) {
             log.warn("Invalid JWT Token", e);
             throw new UnAuthorizedException(ErrorCode.UNAUTHORIZED_INVALID_TOKEN_EXCEPTION);
         } catch (ExpiredJwtException e) {
             log.warn("Expired JWT Token", e);
-            return e.getClaims();
+            return e.getClaims(); // 유효성은 따로 검사함
         } catch (UnsupportedJwtException e) {
             log.warn("Unsupported JWT Token", e);
             throw new UnAuthorizedException(ErrorCode.UNAUTHORIZED_UNSUPPORTED_TOKEN_EXCEPTION);
@@ -114,21 +146,5 @@ public class JwtUtils {
             throw new UnAuthorizedException(ErrorCode.UNAUTHORIZED_INVALID_TOKEN_EXCEPTION);
         }
     }
-
-    private String saveRefreshToken(Long userId, Date refreshTokenExpiresIn) {
-        String refreshToken = Jwts.builder()
-            .setHeaderParam("typ", "JWT")   // typ: JSON Web Token임을 명시
-            .setIssuedAt(new Date())    // iat: 토큰 생성 시점
-            .setExpiration(refreshTokenExpiresIn)    // exp: 토큰 만료 시간
-            .signWith(secretKey, SignatureAlgorithm.HS512)  // alg: 서명 추가
-            .compact();
-
-        redisTemplate.opsForValue().set(
-            RedisKey.REFRESH_TOKEN + userId,
-            refreshToken,
-            REFRESH_TOKEN_DURATION.toMillis(),
-            TimeUnit.MILLISECONDS);
-
-        return refreshToken;
-    }
 }
+

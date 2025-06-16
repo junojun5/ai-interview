@@ -8,7 +8,7 @@ public class PageController {
 
     @GetMapping("/login")
     public String login() {
-        return "pages/login";
+        return "pages/oauth2/oauth2Login";
     }
 
 }

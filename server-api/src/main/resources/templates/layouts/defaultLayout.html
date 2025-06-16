@@ -5,19 +5,20 @@
       xmlns:th="http://www.thymeleaf.org">
 
 <!--공통 JS / CSS 영역을 관리하는 환경 영역-->
-<head th:replace="fragments/config :: ConfigFragment">
-    <title layout:title-pattern="$LAYOUT_TITLE : $CONTENT_TITLE">공통 타이틀</title>
+<head th:replace="~{fragments/config :: ConfigFragment}">
+  <title layout:title-pattern="$LAYOUT_TITLE : $CONTENT_TITLE">공통 타이틀</title>
 </head>
 
 <body>
-<!--Header 영역을 참조합니다.-->
-<header th:replace="fragments/header :: HeaderFragment"></header>
+  <!--Header 영역을 참조합니다.-->
+  <header th:replace="~{fragments/header :: HeaderFragment}"></header>
 
-
-<!--Content 내용 영역을 참조합니다-->
-<th:block layout:fragment="Content"></th:block>
+  <!--Content 내용 영역을 참조합니다-->
+  <main layout:fragment="MainContent">
+    <!-- 이 부분에 자식 페이지가 렌더링됩니다 -->
+  </main>
 
 <!--Footer 영역을 참조합니다.-->
-<footer th:replace="fragments/footer :: FooterFragment"></footer>
+<footer th:replace="~{fragments/footer :: FooterFragment}"></footer>
 </body>
 </html>

@@ -7,7 +7,6 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -16,6 +15,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import server.api.security.filter.AuthTokenFilter;
 import server.api.security.filter.TokenExceptionFilter;
+import server.api.security.handler.CustomAccessDeniedHandler;
+import server.api.security.handler.CustomAuthenticationEntryPoint;
 import server.api.security.service.CustomUserDetailsService;
 
 @RequiredArgsConstructor
@@ -46,16 +47,6 @@ public class WebSecurityConfig {
         return authBuilder.build();
     }
 
-    /**
-     * security를 적용하지 않을 리소스 (보안 필터 우회) authorizeHttpRequests는 필터는 적용되지만 인가만 허용하는 것이고, ignoring()은
-     * 필터가 적용되지 않아 성능상 좋음
-     */
-    @Bean
-    public WebSecurityCustomizer webSecurityCustomizer() { // security를 적용하지 않을 리소스, 보안필터 자체를 우회함
-        return web -> web.ignoring()
-            .requestMatchers("/login", "/error", "/favicon.ico");
-    }
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -73,18 +64,28 @@ public class WebSecurityConfig {
             // request 인증, 인가 설정
             .authorizeHttpRequests((auth) -> auth
                 .requestMatchers(
-                    new AntPathRequestMatcher("/login")
+                    new AntPathRequestMatcher("/lib/**"),
+                    new AntPathRequestMatcher("/images/**"),
+                    new AntPathRequestMatcher("/css/**"),
+                    new AntPathRequestMatcher("/js/**"),
+                    new AntPathRequestMatcher("/login"),
+                    new AntPathRequestMatcher("/error"),
+                    new AntPathRequestMatcher("/favicon.ico"),
+                    new AntPathRequestMatcher("/index.html")
                 ).permitAll()
                 .anyRequest().authenticated()
             )
 
-            .formLogin((form) -> form
-                .loginPage("/login")
-                .permitAll()
-            )
-
             .addFilterBefore(authTokenFilter, UsernamePasswordAuthenticationFilter.class)
-            .addFilterBefore(new TokenExceptionFilter(), authTokenFilter.getClass());
+            // 토큰 검증 과정에서 발생하는 UnAuthorizedException은 TokenExceptionFilter에서 처리
+            .addFilterBefore(new TokenExceptionFilter(), authTokenFilter.getClass())
+
+            .exceptionHandling((exceptions) -> exceptions
+                    .authenticationEntryPoint(
+                        new CustomAuthenticationEntryPoint()) // 인증되지 않은 사용자가 보호된 리소스에 접근하려고 할 때 발생하는 예외를 처리
+                    .accessDeniedHandler(new CustomAccessDeniedHandler())
+                // 인증된 사용자가 보호된 리소스에 접근할 수 없을 때 발생하는 예외를 처리
+            );
 
         return http.build();
     }

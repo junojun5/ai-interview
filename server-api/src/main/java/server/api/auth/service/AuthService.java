@@ -29,7 +29,9 @@ public class AuthService {
         UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = loginRequestDto.toAuthentication();
         authenticationManager.authenticate(usernamePasswordAuthenticationToken);
         List<String> tokenInfo = jwtUtils.createTokenInfo(user.getId());
+        String accessToken = tokenInfo.get(0);
+        String refreshToken = tokenInfo.get(1);
 
-        return LoginResponseDto.of(user.getId(), tokenInfo.get(0), tokenInfo.get(1));
+        return LoginResponseDto.of(user.getId(), accessToken, refreshToken);
     }
 }

@@ -1,22 +1,45 @@
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="https://www.thymeleaf.org">
+<html lang="ko"
+      layout:decorate="~{layouts/defaultLayout}"
+      layout:fragment="MainContent"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout">
+
 <head>
-  <title>Please Log In</title>
+  <title>로그인 테스트</title>
 </head>
+
 <body>
-<h1>Please Log In</h1>
-<div th:if="${param.error}">
-  Invalid username and password.</div>
-<div th:if="${param.logout}">
-  You have been logged out.</div>
+<div class="mt-3 mb-3" sec:authorize="isAuthenticated()">
+  <div>
+    Logged user: <span sec:authentication="principal"></span>
+    <br>
+    Logged userName: <span sec:authentication="name"></span>
+  </div>
+  <form th:action="@{/api/auth/logout}" method="GET" sec:authorize="isAuthenticated()">
+    <button class="btn btn-info" type="submit">로그아웃</button>
+  </form>
+</div>
+
+<div class="p-3">
+  <h4>
+    <a href="/oauth2/authorization/google">1. 구글 로그인 테스트</a>
+  </h4>
+  <h4>
+    <a href="/oauth2/authorization/naver">2. 네이버 로그인 테스트</a>
+  </h4>
+</div>
+
+<!-- 로그인 폼을 추가합니다 -->
 <form th:action="@{/login}" method="post">
-  <div>
-    <input type="text" name="username" placeholder="Username"/>
-  </div>
-  <div>
-    <input type="password" name="password" placeholder="Password"/>
-  </div>
-  <input type="submit" value="Log in" />
+  <label for="username">아이디:</label>
+  <input type="text" id="username" name="username"/>
+  <br>
+  <label for="password">비밀번호:</label>
+  <input type="password" id="password" name="password"/>
+  <br>
+  <button type="submit">로그인</button>
 </form>
 </body>
 </html>
