@@ -1,0 +1,356 @@
+# Server-API - Cursor Rules
+
+## 모듈 목적
+웹 컨트롤러, 설정, 메인 애플리케이션을 관리하는 API 서버 모듈
+
+## 패키지 구조 규칙
+```
+src/main/java/
+├── api/
+│   ├── controller/    # REST API 컨트롤러
+│   ├── dto/          # API 요청/응답 DTO
+│   └── exception/    # API 예외 처리
+├── config/           # Spring 설정 클래스
+├── security/         # Spring Security 설정
+└── Application.java  # 메인 애플리케이션 클래스
+
+src/main/resources/
+├── templates/        # Thymeleaf 템플릿
+├── static/          # 정적 리소스 (CSS, JS, 이미지)
+└── application.yml  # 애플리케이션 설정
+```
+
+## REST API 컨트롤러 규칙
+
+### 기본 규칙
+- @RestController 어노테이션 사용 (REST API)
+- @Controller 어노테이션 사용 (Thymeleaf 뷰)
+- @RequestMapping으로 기본 경로 설정
+- HTTP 메서드별 어노테이션 사용 (@GetMapping, @PostMapping 등)
+- @Valid 어노테이션으로 입력값 검증
+
+### API 응답 형식
+- **성공 응답**: `SuccessResponse` 클래스 사용 (module-common에 구현됨)
+- **에러 응답**: `ErrorResponse` 클래스 사용 (module-common에 구현됨)
+- `SuccessCode` enum을 통한 표준화된 성공 코드 관리
+- HTTP 상태 코드 적절히 설정
+
+### 예시 컨트롤러
+```java
+@RestController
+@RequestMapping("/api/v1/users")
+@Validated
+public class UserController {
+    
+    private final UserService userService;
+    
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
+    
+    @GetMapping("/{id}")
+    public ResponseEntity<SuccessResponse<UserResponse>> getUser(@PathVariable Long id) {
+        User user = userService.findById(id);
+        UserResponse response = UserResponse.from(user);
+        return SuccessResponse.success(SuccessCode.OK_SUCCESS, response);
+    }
+    
+    @PostMapping
+    public ResponseEntity<SuccessResponse<UserResponse>> createUser(
+            @Valid @RequestBody CreateUserRequest request) {
+        User user = userService.createUser(request);
+        UserResponse response = UserResponse.from(user);
+        return SuccessResponse.success(SuccessCode.CREATED_SUCCESS, response);
+    }
+    
+    @GetMapping
+    public ResponseEntity<SuccessResponse<List<UserResponse>>> getUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Page<User> users = userService.findUsers(PageRequest.of(page, size));
+        List<UserResponse> responses = users.getContent().stream()
+                .map(UserResponse::from)
+                .collect(Collectors.toList());
+        return SuccessResponse.success(SuccessCode.OK_SUCCESS, responses);
+    }
+    
+    // 데이터 없는 성공 응답 예시
+    @DeleteMapping("/{id}")
+    public ResponseEntity<SuccessResponse<String>> deleteUser(@PathVariable Long id) {
+        userService.deleteUser(id);
+        return SuccessResponse.OK; // 미리 정의된 OK 응답
+    }
+}
+```
+
+## DTO 규칙
+
+### 요청 DTO
+- 입력값 검증 어노테이션 사용 (@NotNull, @NotBlank, @Email 등)
+- 기본 생성자와 모든 필드 생성자 제공
+- 빌더 패턴 적용 고려
+
+### 응답 DTO
+- 엔티티를 직접 노출하지 않고 DTO로 변환
+- static factory 메서드 제공 (from, of 등)
+- JSON 직렬화 고려
+
+### 예시 DTO
+```java
+// 요청 DTO
+public class CreateUserRequest {
+    
+    @NotBlank(message = "사용자명은 필수입니다")
+    @Size(min = 3, max = 50, message = "사용자명은 3-50자 사이여야 합니다")
+    private String username;
+    
+    @NotBlank(message = "이메일은 필수입니다")
+    @Email(message = "올바른 이메일 형식이 아닙니다")
+    private String email;
+    
+    // 생성자, getter/setter
+}
+
+// 응답 DTO
+public class UserResponse {
+    
+    private Long id;
+    private String username;
+    private String email;
+    private LocalDateTime createdAt;
+    
+    public static UserResponse from(User user) {
+        return new UserResponse(
+            user.getId(),
+            user.getUsername(),
+            user.getEmail(),
+            user.getCreatedAt()
+        );
+    }
+    
+    // 생성자, getter/setter
+}
+
+// 성공 응답은 SuccessResponse 사용 (module-common에 이미 구현됨)
+@Getter
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+public class SuccessResponse<T> {
+    private int status;
+    private boolean success;
+    private String message;
+    private T data;
+
+    public static final ResponseEntity<SuccessResponse<String>> OK = success(SuccessCode.OK_SUCCESS, null);
+
+    public static <T> ResponseEntity<SuccessResponse<T>> success(SuccessCode successCode, T data) {
+        return ResponseEntity
+                .status(successCode.getStatus())
+                .header("Content-Type", "application/json;charset=UTF-8")
+                .body(new SuccessResponse<>(successCode.getStatus(), true, successCode.getMessage(), data));
+    }
+}
+
+// 에러 응답은 ErrorResponse 사용 (module-common에 이미 구현됨)
+@Getter
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+public class ErrorResponse {
+    private int status;
+    private boolean success;
+    private String message;
+
+    public static ErrorResponse error(ErrorCode errorCode) {
+        return new ErrorResponse(errorCode.getStatus(), false, errorCode.getMessage());
+    }
+
+    public static ErrorResponse error(ErrorCode errorCode, String message) {
+        return new ErrorResponse(errorCode.getStatus(), false, message);
+    }
+}
+```
+
+## 예외 처리 규칙
+
+### 글로벌 예외 처리 - ControllerExceptionAdvice
+- **모든 예외 처리는 `ControllerExceptionAdvice.java`에서 중앙 집중 관리**
+- `@RestControllerAdvice` 어노테이션 사용
+- `ErrorResponse` 클래스를 통한 일관된 에러 응답 형식
+- `ErrorCode` enum을 통한 표준화된 에러 코드 관리
+- 예외 레벨에 따른 적절한 로깅 (4xx: warn, 5xx: error)
+
+### 커스텀 예외 생성 규칙
+- `CustomException` 추상 클래스 상속 (기본 생성자 없음)
+- **필수 생성자**: `ErrorCode`를 받는 생성자 또는 `message + ErrorCode`를 받는 생성자
+- 비즈니스 로직에서 발생하는 예외는 커스텀 예외로 처리
+
+### 예외 처리 구조
+```java
+// 1. 커스텀 예외 생성 (module-core에서)
+@Getter
+public class NotFoundException extends CustomException {
+
+    public NotFoundException(String message, ErrorCode errorCode) {
+        super(message, errorCode);
+    }
+
+    public NotFoundException(String message) {
+        super(message, ErrorCode.NOT_FOUND_EXCEPTION);
+    }
+}
+
+// 2. 서비스에서 예외 발생
+@Service
+public class UserService {
+    public User findById(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(UserNotFoundException::new);
+    }
+}
+
+// 3. ControllerExceptionAdvice에서 자동 처리
+@RestControllerAdvice
+public class ControllerExceptionAdvice {
+    
+    @ExceptionHandler(CustomException.class)
+    protected ResponseEntity<ErrorResponse> handleBaseException(CustomException exception) {
+        if (exception.getStatus() >= 400 && exception.getStatus() < 500) {
+            log.warn(exception.getMessage(), exception);
+        } else {
+            log.error(exception.getMessage(), exception);
+        }
+        return ResponseEntity.status(exception.getStatus())
+            .body(ErrorResponse.error(exception.getErrorCode()));
+    }
+}
+```
+
+### 지원되는 예외 타입
+- **CustomException**: 비즈니스 로직 예외 (ErrorCode 기반)
+- **BindException**: Spring Validation 예외 (400)
+- **HttpMessageNotReadableException**: 잘못된 Enum 값 (400)
+- **MissingRequestValueException**: 필수 요청값 누락 (400)
+- **TypeMismatchException**: 타입 불일치 (400)
+- **HttpRequestMethodNotSupportedException**: 지원하지 않는 HTTP 메서드 (405)
+- **HttpMediaTypeNotAcceptableException**: 지원하지 않는 응답 형식 (406)
+- **HttpMediaTypeException**: 지원하지 않는 미디어 타입 (415)
+- **Exception**: 기타 모든 예외 (500)
+
+### 응답 형식
+
+#### 성공 응답 (SuccessResponse)
+```json
+{
+    "status": 200,
+    "success": true,
+    "message": "성공입니다.",
+    "data": {
+        "id": 1,
+        "username": "user123",
+        "email": "user@example.com"
+    }
+}
+```
+
+#### 에러 응답 (ErrorResponse)
+```json
+{
+    "status": 404,
+    "success": false,
+    "message": "존재하지 않는 유저입니다."
+}
+```
+
+## Spring Security 규칙
+
+### 보안 설정
+- SecurityFilterChain 빈 설정
+- 인증/인가 규칙 명시
+- CSRF 설정 (API는 비활성화, 웹은 활성화)
+- 세션 관리 정책 설정
+
+### 예시 보안 설정
+```java
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+    
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeHttpRequests(authz -> authz
+                .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers("/api/v1/**").authenticated()
+                .requestMatchers("/admin/**").hasRole("ADMIN")
+                .anyRequest().permitAll()
+            )
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            .csrf(csrf -> csrf
+                .ignoringRequestMatchers("/api/**")
+            );
+        
+        return http.build();
+    }
+    
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+```
+
+## 설정 파일 규칙
+
+### application.yml 구조
+```yaml
+spring:
+  profiles:
+    active: local
+  
+  datasource:
+    url: jdbc:mariadb://localhost:3306/ai_interview
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:password}
+    driver-class-name: org.mariadb.jdbc.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MariaDBDialect
+  
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+  
+  thymeleaf:
+    cache: false
+    prefix: classpath:/templates/
+    suffix: .html
+
+logging:
+  level:
+    com.example.aiinterview: DEBUG
+    org.springframework.security: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+```
+
+## 주의사항
+- API 버전 관리 (/api/v1, /api/v2)
+- 입력값 검증 철저히 수행
+- 민감한 정보 로깅 금지
+- CORS 설정 필요 시 적절히 구성
+- 성능 모니터링을 위한 액추에이터 설정
+- 프로덕션 환경에서는 보안 헤더 설정 

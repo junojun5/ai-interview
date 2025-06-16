@@ -1,0 +1,387 @@
+# Module-Core - Cursor Rules
+
+## 모듈 목적
+도메인 엔티티, 리포지토리, 비즈니스 로직을 관리하는 핵심 모듈
+
+## 패키지 구조 규칙
+```
+src/main/java/
+├── domain/
+│   ├── entity/        # JPA 엔티티 클래스
+│   ├── repository/    # JPA 리포지토리 인터페이스
+│   ├── service/       # 비즈니스 로직 서비스
+│   └── dto/          # 도메인 관련 DTO
+└── infrastructure/
+    ├── config/        # JPA, QueryDSL 설정
+    └── repository/    # 커스텀 리포지토리 구현체
+```
+
+## JPA 엔티티 규칙
+
+### 기본 규칙
+- @Entity 어노테이션 필수
+- @Table 어노테이션으로 테이블명 명시 (선택사항, 클래스명과 다를 때)
+- 기본 키는 @Id와 @GeneratedValue 사용
+- 모든 필드에 @Column 어노테이션 권장
+- 생성일시, 수정일시는 AuditingTimeEntity 상속으로 처리
+- **빌더 패턴**: @Builder 어노테이션 사용 (access = AccessLevel.PRIVATE)
+- **정적 팩토리 메서드**: newInstance() 메서드로 객체 생성
+- **생성자 접근 제한**: @NoArgsConstructor(access = AccessLevel.PROTECTED), @AllArgsConstructor(access = AccessLevel.PRIVATE)
+
+### 도메인 로직 규칙
+- **비즈니스 메서드**: 엔티티 내부에 도메인 로직 구현
+- **상태 변경 메서드**: 필드 직접 수정 대신 의미있는 메서드명 사용
+- **검증 로직**: 생성 시점과 상태 변경 시점에 유효성 검증
+- **불변성 보장**: setter 메서드 금지, 상태 변경은 비즈니스 메서드를 통해서만
+
+### 정적 팩토리 메서드 (newInstance) 규칙
+- **메서드명**: newInstance() 사용
+- **접근 제한**: public static으로 선언
+- **빌더 활용**: 내부적으로 builder() 패턴 사용
+- **매개변수**: 필수 필드만 받아서 객체 생성
+- **반환**: 완전히 초기화된 엔티티 객체 반환
+- **목적**: 객체 생성의 의도를 명확히 하고, 불완전한 객체 생성 방지
+
+### 연관관계 매핑
+- @OneToMany, @ManyToOne 등 연관관계 어노테이션 사용
+- FetchType.LAZY 기본 사용 (성능 최적화)
+- 양방향 연관관계 시 연관관계 편의 메서드 작성
+- @JoinColumn으로 외래키 컬럼명 명시
+
+### 예시 엔티티
+```java
+@Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Builder(access = AccessLevel.PRIVATE)
+public class User extends AuditingTimeEntity {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @NotBlank
+    @Email
+    @Size(max = 30)
+    private String username;
+    
+    @Size(max = 100)
+    private String password;
+    
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    private ProviderType providerType;
+    
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    private RoleType role;
+    
+    // 정적 팩토리 메서드 - 객체 생성의 유일한 방법
+    public static User newInstance(String username, String password, ProviderType providerType, RoleType role) {
+        return builder()
+            .username(username)
+            .password(password)
+            .providerType(providerType)
+            .role(role)
+            .build();
+    }
+    
+    // 필요시 비즈니스 메서드 추가
+    // equals/hashCode 메서드 (id 기반, 필요시)
+}
+```
+
+## Repository 규칙
+
+### 기본 규칙
+- JpaRepository<Entity, ID> 상속
+- 인터페이스명은 Entity명 + Repository
+- **모든 커스텀 쿼리는 QueryDSL로 구현** (@Query 어노테이션 사용 금지)
+- 단순 메서드명 쿼리(findBy, existsBy 등)도 가능한 QueryDSL로 대체 권장
+
+### QueryDSL 사용 규칙
+- **Q클래스 활용**: 모든 쿼리는 Q클래스를 통한 타입 세이프 쿼리 작성
+- **JPAQueryFactory 주입**: 생성자 주입 방식으로 JPAQueryFactory 사용
+- **동적 쿼리**: BooleanExpression과 BooleanBuilder 활용
+- **메서드 분리**: 조건별로 private 메서드로 분리하여 재사용성 향상
+- **null 안전성**: 조건 메서드에서 null 체크 후 BooleanExpression 반환
+- **페이징**: Pageable을 활용한 페이징 쿼리 구현
+- **성능 최적화**: fetch join, projection 적극 활용
+
+### 예시 리포지토리
+```java
+// 기본 JPA Repository (단순 CRUD만)
+public interface UserRepository extends JpaRepository<User, Long>, UserRepositoryCustom {
+    // 기본 CRUD 메서드만 사용, 커스텀 쿼리는 모두 QueryDSL로 구현
+}
+
+// QueryDSL 커스텀 리포지토리 인터페이스
+public interface UserRepositoryCustom {
+    Optional<User> findByUsername(String username);
+    Optional<User> findByEmail(String email);
+    List<User> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+    List<User> findUsersWithConditions(UserSearchCondition condition);
+    Page<User> findUsersWithPaging(UserSearchCondition condition, Pageable pageable);
+    List<UserProjection> findUserProjections(UserSearchCondition condition);
+    boolean existsByUsername(String username);
+    long countByProviderType(ProviderType providerType);
+}
+
+// QueryDSL 구현체
+@Repository
+@RequiredArgsConstructor
+public class UserRepositoryImpl implements UserRepositoryCustom {
+    
+    private final JPAQueryFactory queryFactory;
+    
+    @Override
+    public Optional<User> findByUsername(String username) {
+        QUser user = QUser.user;
+        
+        User result = queryFactory
+                .selectFrom(user)
+                .where(user.username.eq(username))
+                .fetchOne();
+                
+        return Optional.ofNullable(result);
+    }
+    
+    @Override
+    public Optional<User> findByEmail(String email) {
+        QUser user = QUser.user;
+        
+        User result = queryFactory
+                .selectFrom(user)
+                .where(user.username.eq(email)) // username이 email 역할
+                .fetchOne();
+                
+        return Optional.ofNullable(result);
+    }
+    
+    @Override
+    public List<User> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end) {
+        QUser user = QUser.user;
+        
+        return queryFactory
+                .selectFrom(user)
+                .where(user.createdAt.between(start, end))
+                .orderBy(user.createdAt.desc())
+                .fetch();
+    }
+    
+    @Override
+    public List<User> findUsersWithConditions(UserSearchCondition condition) {
+        QUser user = QUser.user;
+        
+        return queryFactory
+                .selectFrom(user)
+                .where(
+                    usernameContains(condition.getUsername()),
+                    providerTypeEq(condition.getProviderType()),
+                    roleTypeEq(condition.getRoleType()),
+                    createdAtBetween(condition.getStartDate(), condition.getEndDate())
+                )
+                .orderBy(user.createdAt.desc())
+                .fetch();
+    }
+    
+    @Override
+    public Page<User> findUsersWithPaging(UserSearchCondition condition, Pageable pageable) {
+        QUser user = QUser.user;
+        
+        List<User> content = queryFactory
+                .selectFrom(user)
+                .where(
+                    usernameContains(condition.getUsername()),
+                    providerTypeEq(condition.getProviderType()),
+                    roleTypeEq(condition.getRoleType())
+                )
+                .orderBy(user.createdAt.desc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+                
+        Long total = queryFactory
+                .select(user.count())
+                .from(user)
+                .where(
+                    usernameContains(condition.getUsername()),
+                    providerTypeEq(condition.getProviderType()),
+                    roleTypeEq(condition.getRoleType())
+                )
+                .fetchOne();
+                
+        return new PageImpl<>(content, pageable, total != null ? total : 0L);
+    }
+    
+    @Override
+    public List<UserProjection> findUserProjections(UserSearchCondition condition) {
+        QUser user = QUser.user;
+        
+        return queryFactory
+                .select(Projections.constructor(UserProjection.class,
+                    user.id,
+                    user.username,
+                    user.role,
+                    user.createdAt
+                ))
+                .from(user)
+                .where(
+                    usernameContains(condition.getUsername()),
+                    roleTypeEq(condition.getRoleType())
+                )
+                .fetch();
+    }
+    
+    @Override
+    public boolean existsByUsername(String username) {
+        QUser user = QUser.user;
+        
+        Integer result = queryFactory
+                .selectOne()
+                .from(user)
+                .where(user.username.eq(username))
+                .fetchFirst();
+                
+        return result != null;
+    }
+    
+    @Override
+    public long countByProviderType(ProviderType providerType) {
+        QUser user = QUser.user;
+        
+        Long count = queryFactory
+                .select(user.count())
+                .from(user)
+                .where(user.providerType.eq(providerType))
+                .fetchOne();
+                
+        return count != null ? count : 0L;
+    }
+    
+    // 조건 메서드들 (재사용 가능)
+    private BooleanExpression usernameContains(String username) {
+        return StringUtils.hasText(username) ? QUser.user.username.contains(username) : null;
+    }
+    
+    private BooleanExpression providerTypeEq(ProviderType providerType) {
+        return providerType != null ? QUser.user.providerType.eq(providerType) : null;
+    }
+    
+    private BooleanExpression roleTypeEq(RoleType roleType) {
+        return roleType != null ? QUser.user.role.eq(roleType) : null;
+    }
+    
+    private BooleanExpression createdAtBetween(LocalDateTime start, LocalDateTime end) {
+        if (start != null && end != null) {
+            return QUser.user.createdAt.between(start, end);
+        } else if (start != null) {
+            return QUser.user.createdAt.goe(start);
+        } else if (end != null) {
+            return QUser.user.createdAt.loe(end);
+        }
+        return null;
+    }
+}
+```
+
+## Service 규칙
+
+### 기본 규칙
+- @Service 어노테이션 사용
+- @Transactional 어노테이션 적절히 사용
+- 생성자 주입 방식으로 의존성 주입
+- 비즈니스 로직과 데이터 접근 로직 분리
+
+### 트랜잭션 관리
+- 읽기 전용 작업: @Transactional(readOnly = true)
+- 쓰기 작업: @Transactional
+- 예외 발생 시 롤백 정책 명시
+
+### 예시 서비스
+```java
+@Service
+@Transactional(readOnly = true)
+public class UserService {
+    
+    private final UserRepository userRepository;
+    
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+    
+    public User findById(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("User not found with id: " + id));
+    }
+    
+    public User findByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new NotFoundException("User not found with username: " + username));
+    }
+    
+    public Page<User> searchUsers(UserSearchCondition condition, Pageable pageable) {
+        return userRepository.findUsersWithPaging(condition, pageable);
+    }
+    
+    public List<UserProjection> getUserProjections(UserSearchCondition condition) {
+        return userRepository.findUserProjections(condition);
+    }
+    
+    public boolean isUsernameExists(String username) {
+        return userRepository.existsByUsername(username);
+    }
+    
+    public long countUsersByProvider(ProviderType providerType) {
+        return userRepository.countByProviderType(providerType);
+    }
+    
+    @Transactional
+    public User createUser(CreateUserRequest request) {
+        validateDuplicateUsername(request.getUsername());
+        
+        // newInstance() 정적 팩토리 메서드 사용
+        User user = User.newInstance(
+            request.getUsername(),
+            request.getPassword(),
+            request.getProviderType(),
+            request.getRole()
+        );
+        return userRepository.save(user);
+    }
+    
+    @Transactional
+    public User updateUserPassword(Long userId, String newPassword, PasswordEncoder encoder) {
+        User user = findById(userId);
+        user.updatePassword(newPassword, encoder);
+        return userRepository.save(user);
+    }
+    
+    private void validateDuplicateUsername(String username) {
+        if (userRepository.existsByUsername(username)) {
+            throw new ConflictException("Username already exists: " + username);
+        }
+    }
+}
+```
+
+## QueryDSL 필수 사용 규칙
+- **@Query 어노테이션 금지**: 모든 커스텀 쿼리는 QueryDSL로 구현
+- **메서드명 쿼리 최소화**: findBy, existsBy 등도 QueryDSL로 대체 권장
+- **조건 메서드 분리**: BooleanExpression 반환하는 private 메서드로 조건 분리
+- **null 안전성**: 모든 조건 메서드에서 null 체크 필수
+- **페이징 구현**: count 쿼리와 content 쿼리 분리하여 PageImpl 사용
+- **Projection 활용**: 필요한 필드만 조회하는 DTO Projection 적극 활용
+- **성능 최적화**: fetch join, 인덱스 활용, 불필요한 조회 최소화
+
+## 주의사항
+- **객체 생성**: new 키워드 대신 newInstance() 정적 팩토리 메서드 사용
+- **빌더 패턴**: 외부에서 직접 builder() 호출 금지 (private 접근 제한)
+- **상태 변경**: setter 사용 금지, 의미있는 메서드명으로 상태 변경
+- **QueryDSL 우선**: 모든 쿼리는 QueryDSL로 구현, @Query 사용 금지
+- N+1 문제 방지를 위한 fetch join 활용
+- 대용량 데이터 처리 시 페이징 적용
+- 엔티티 직접 반환 금지 (DTO 변환 후 반환)
+- 테스트 시 @DataJpaTest 활용
+- 데이터베이스 스키마 변경 시 마이그레이션 스크립트 작성 

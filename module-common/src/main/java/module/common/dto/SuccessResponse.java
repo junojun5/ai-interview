@@ -14,17 +14,18 @@ import org.springframework.http.ResponseEntity;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class SuccessResponse<T> {
 
-    public static final ResponseEntity<SuccessResponse<String>> OK = success(SuccessCode.OK_SUCCESS, null);
-
     private int status;
     private boolean success;
     private String message;
     private T data;
 
+    public static final ResponseEntity<SuccessResponse<String>> OK = success(SuccessCode.OK_SUCCESS, null);
+
     public static <T> ResponseEntity<SuccessResponse<T>> success(SuccessCode successCode, T data) {
         return ResponseEntity
-            .status(successCode.getStatus())
-            .body(new SuccessResponse<>(successCode.getStatus(), true, successCode.getMessage(),
-                data));
+                .status(successCode.getStatus())
+                .header("Content-Type", "application/json;charset=UTF-8")
+                .body(new SuccessResponse<>(successCode.getStatus(), true, successCode.getMessage(),
+                        data));
     }
 }

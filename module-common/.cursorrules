@@ -1,0 +1,159 @@
+# Module-Common - Cursor Rules
+
+## 모듈 목적
+공통 유틸리티, 상수, 예외 클래스, 공통 설정을 관리하는 모듈
+
+## 패키지 구조 규칙
+```
+src/main/java/
+├── common/
+│   ├── constants/     # 상수 클래스
+│   ├── exception/     # 커스텀 예외 클래스
+│   ├── util/         # 유틸리티 클래스
+│   ├── config/       # 공통 설정 클래스
+│   └── dto/          # 공통 DTO 클래스
+```
+
+## 코딩 규칙
+
+### 상수 클래스 (constants/)
+- 모든 상수는 public static final로 선언
+- 관련된 상수들은 하나의 클래스로 그룹화
+- 클래스명은 Constants 접미사 사용 (예: ErrorConstants, MessageConstants)
+- 상수명은 UPPER_SNAKE_CASE 사용
+
+### 예외 클래스 (exception/)
+- CustomException 추상 클래스 상속 (기본 생성자 없음)
+- 클래스명은 Exception 접미사 사용
+- ErrorCode enum을 통한 표준화된 에러 코드 관리
+- **필수 생성자**: `ErrorCode`를 받는 생성자 또는 `message + ErrorCode`를 받는 생성자
+- 모든 예외는 ControllerExceptionAdvice에서 중앙 집중 처리
+
+### 유틸리티 클래스 (util/)
+- 모든 메서드는 static으로 선언
+- 클래스명은 Utils 또는 Helper 접미사 사용
+- private 생성자로 인스턴스화 방지
+- null 체크 및 방어적 프로그래밍 적용
+
+### 공통 DTO (dto/)
+- 직렬화 가능하도록 Serializable 구현
+- 기본 생성자와 모든 필드 생성자 제공
+- equals(), hashCode(), toString() 메서드 오버라이드
+- 빌더 패턴 적용 고려
+
+#### API 응답 DTO
+- **SuccessResponse**: 성공 응답용 DTO (SuccessCode 기반)
+- **ErrorResponse**: 에러 응답용 DTO (ErrorCode 기반)
+
+## 예시 코드 스타일
+
+### 상수 클래스
+```java
+public final class ErrorConstants {
+    public static final String INVALID_INPUT = "INVALID_INPUT";
+    public static final String USER_NOT_FOUND = "USER_NOT_FOUND";
+    
+    private ErrorConstants() {
+        // 인스턴스화 방지
+    }
+}
+```
+
+### 예외 클래스
+```java
+// 기본 CustomException 구조 (이미 구현됨)
+@Getter
+public abstract class CustomException extends RuntimeException {
+    private final ErrorCode errorCode;
+
+    protected CustomException(ErrorCode errorCode) {
+        this.errorCode = errorCode;
+    }
+
+    protected CustomException(String message, ErrorCode errorCode) {
+        super(message);
+        this.errorCode = errorCode;
+    }
+
+    public int getStatus() {
+        return errorCode.getStatus();
+    }
+}
+
+// 구체적인 예외 클래스 예시
+@Getter
+public class NotFoundException extends CustomException {
+
+    public NotFoundException(String message, ErrorCode errorCode) {
+        super(message, errorCode);
+    }
+
+    public NotFoundException(String message) {
+        super(message, ErrorCode.NOT_FOUND_EXCEPTION);
+    }
+}
+```
+
+### 유틸리티 클래스
+```java
+public final class StringUtils {
+    
+    private StringUtils() {
+        // 인스턴스화 방지
+    }
+    
+    public static boolean isEmpty(String str) {
+        return str == null || str.trim().isEmpty();
+    }
+    
+    public static boolean isNotEmpty(String str) {
+        return !isEmpty(str);
+    }
+}
+
+### API 응답 DTO
+```java
+// 성공 응답 DTO (이미 구현됨)
+@Getter
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+public class SuccessResponse<T> {
+    private int status;
+    private boolean success;
+    private String message;
+    private T data;
+
+    public static final ResponseEntity<SuccessResponse<String>> OK = success(SuccessCode.OK_SUCCESS, null);
+
+    public static <T> ResponseEntity<SuccessResponse<T>> success(SuccessCode successCode, T data) {
+        return ResponseEntity
+                .status(successCode.getStatus())
+                .header("Content-Type", "application/json;charset=UTF-8")
+                .body(new SuccessResponse<>(successCode.getStatus(), true, successCode.getMessage(), data));
+    }
+}
+
+// 에러 응답 DTO (이미 구현됨)
+@Getter
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+public class ErrorResponse {
+    private int status;
+    private boolean success;
+    private String message;
+
+    public static ErrorResponse error(ErrorCode errorCode) {
+        return new ErrorResponse(errorCode.getStatus(), false, errorCode.getMessage());
+    }
+
+    public static ErrorResponse error(ErrorCode errorCode, String message) {
+        return new ErrorResponse(errorCode.getStatus(), false, message);
+    }
+}
+```
+
+## 주의사항
+- 다른 모듈에 대한 의존성 최소화
+- Spring Framework 의존성은 필요한 경우에만 사용
+- 테스트 코드 필수 작성
+- 문서화 철저히 수행

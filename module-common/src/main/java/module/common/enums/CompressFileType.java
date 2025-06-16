@@ -7,8 +7,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum CompressFileType {
 	ZIP("zip"),
-	TAR("tar")
-	;
+	TAR("tar");
 
 	private final String extension;
 }
